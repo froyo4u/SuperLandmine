@@ -23,6 +23,9 @@ You can config the features in config/Superlandmine.cfg
 
 ## Changelog
 
+### 1.1.4
+* Update to fix for Lethal Company v80
+
 ### 1.1.3
 *Big thanks to @WarrenHood for this patch
 
