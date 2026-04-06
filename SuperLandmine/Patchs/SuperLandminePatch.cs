@@ -201,51 +201,88 @@ namespace SuperLandmine.Patchs
         {
             if (Plugin.config_LandmineCanSpawnOutside.Value == true && __instance.IsServer && __instance.IsHost)
             {
+                if (__instance.currentLevel == null) return;
                 // Delete all existing landmines
                 Utils.OutsideLandmineMarker[] outsideLandmines = GameObject.FindObjectsOfType<Utils.OutsideLandmineMarker>();
-                foreach (Utils.OutsideLandmineMarker landmineMarker in outsideLandmines) {
+                foreach (Utils.OutsideLandmineMarker landmineMarker in outsideLandmines)
+                {
                     GameObject.Destroy(landmineMarker.gameObject);
                 }
 
                 Plugin.log.LogInfo("Load landmine");
                 SelectableLevel selectableLevel = __instance.currentLevel;
                 SpawnableMapObject[] spawnableMapObjects = selectableLevel.spawnableMapObjects;
-                if (selectableLevel.spawnableMapObjects.Length != 0)
+                if (spawnableMapObjects != null && spawnableMapObjects.Length != 0)
                 {
                     Plugin.log.LogInfo("Spawn landmine outside");
                     foreach (SpawnableMapObject spawnObject in spawnableMapObjects)
                     {
-                        if ((Object)(object)spawnObject.prefabToSpawn.GetComponentInChildren<Landmine>() != (Object)null)
+                        if (spawnObject.prefabToSpawn.GetComponentInChildren<Landmine>() != null)
                         {
-
-                            AnimationCurve landminecurve = new AnimationCurve((Keyframe[])(object)new Keyframe[2]
+                            AnimationCurve landminecurve = new AnimationCurve(new Keyframe[]
                             {
                                 new Keyframe(0f, Plugin.config_LandmineMinAmount.Value),
                                 new Keyframe(1f, Plugin.config_LandmineMaxAmount.Value)
                             });
                             Transform[] shipSpawnPathPoints = __instance.shipSpawnPathPoints;
+
+                            if (shipSpawnPathPoints == null) return;
+
                             for (int i = 0; i < shipSpawnPathPoints.Length; i++)
                             {
-                                for (int j = 0; j < landminecurve.Evaluate((float)Random.Range(0f, 1f)); j++)
+                                int spawnCount = (int)landminecurve.Evaluate(Random.Range(0f, 1f));
+                                for (int j = 0; j < spawnCount; j++)
                                 {
                                     System.Random random = new System.Random();
-                                    Vector3 randomNavMeshPositionInBoxPredictable = __instance.GetRandomNavMeshPositionInBoxPredictable(shipSpawnPathPoints[i].position, 300f, __instance.navHit, random, -5);
-                                    Quaternion rotation;
-                                    (randomNavMeshPositionInBoxPredictable, rotation) = Utils.projectToGround(randomNavMeshPositionInBoxPredictable);
-                                    Plugin.log.LogInfo("Spawn landmine outside at" + randomNavMeshPositionInBoxPredictable.ToString());
-                                    GameObject gameObject = UnityEngine.Object.Instantiate<GameObject>(spawnObject.prefabToSpawn, randomNavMeshPositionInBoxPredictable, rotation);
-                                    gameObject.SetActive(value: true);
-                                    gameObject.GetComponent<NetworkObject>().Spawn();
-                                    // Mark this as an outside landmine
-                                    gameObject.AddComponent<Utils.OutsideLandmineMarker>();
+
+                                    NavMeshHit hit = Traverse.Create(__instance).Field<NavMeshHit>("navHit").Value;
+
+                                    System.Type[] navMethodTypes = new System.Type[] {
+                                        typeof(UnityEngine.Vector3),
+                                        typeof(float),
+                                        typeof(UnityEngine.AI.NavMeshHit),
+                                        typeof(System.Random),
+                                        typeof(int),
+                                        typeof(float)
+                                    };
+
+                                    var method = AccessTools.Method(
+                                        typeof(RoundManager),
+                                        "GetRandomNavMeshPositionInBoxPredictable",
+                                        navMethodTypes
+                                    );
+
+                                    if (method != null)
+                                    {
+                                        object[] navParams = new object[] {
+                                            shipSpawnPathPoints[i].position,
+                                            300f,
+                                            hit,
+                                            random,
+                                            -1,
+                                            1f
+                                        };
+
+                                        Vector3 randomPos = (Vector3)method.Invoke(__instance, navParams);
+
+                                        Quaternion rotation;
+                                        Vector3 finalPos;
+                                        (finalPos, rotation) = Utils.projectToGround(randomPos);
+
+                                        GameObject gameObject = Object.Instantiate(spawnObject.prefabToSpawn, finalPos, rotation);
+                                        gameObject.SetActive(true);
+                                        gameObject.GetComponent<NetworkObject>().Spawn();
+                                        gameObject.AddComponent<Utils.OutsideLandmineMarker>();
+                                    } else
+                                    {
+                                        Plugin.log.LogError("FAILED TO FIND METHOD: Even with reflection and parameter counting.");
+                                    }
                                 }
                             }
-
                         }
                     }
                 }
             }
-
         }
     }
 }
